@@ -1,58 +1,35 @@
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-
-typedef enum { DANCE, MUSIC, OTHER } Category;
-
-typedef struct Node {
-    char name[100];
-    Category category;
-    int score; // -1 ha még nem ismert
-    struct Node* left;
-    struct Node* right;
-} Node;
-
-// Függvény a kategória szövegből való konvertálására
-Category parse_category(const char* cat_str) {
-    if (strcmp(cat_str, "DANCE") == 0) return DANCE;
-    if (strcmp(cat_str, "MUSIC") == 0) return MUSIC;
-    return OTHER;
+f = fopen("score.txt", "r");
+if (!f) {
+    perror("Hiba a score.txt megnyitásakor");
+    return 1;
 }
 
-// Új csomópont létrehozása
-Node* create_node(const char* name, const char* cat_str) {
-    Node* new_node = (Node*)malloc(sizeof(Node));
-    strcpy(new_node->name, name);
-    new_node->category = parse_category(cat_str);
-    new_node->score = -1; // kezdetben ismeretlen
-    new_node->left = new_node->right = NULL;
-    return new_node;
-}
+while (fgets(line, sizeof(line), f)) {
+    // Nagyon fontos: sor végéről \n és \r eltávolítása
+    trim(line);
 
-// Beszúrás BST-be név szerint (ABC sorrend)
-Node* insert(Node* root, const char* name, const char* cat_str) {
-    if (root == NULL) return create_node(name, cat_str);
-    int cmp = strcmp(name, root->name);
-    if (cmp < 0)
-        root->left = insert(root->left, name, cat_str);
-    else if (cmp > 0)
-        root->right = insert(root->right, name, cat_str);
-    return root;
-}
+    // Másoljuk a sort, mert strtok tönkreteszi
+    char temp[200];
+    strcpy(temp, line);
 
-// Keresés név szerint BST-ben
-Node* search(Node* root, const char* name) {
-    if (root == NULL) return NULL;
-    int cmp = strcmp(name, root->name);
-    if (cmp == 0) return root;
-    if (cmp < 0) return search(root->left, name);
-    else return search(root->right, name);
-}
+    // Bontás névre és pontszámra
+    char* name = strtok(temp, ",");
+    char* score_str = strtok(NULL, ",");
 
-// Fordított ABC sorrend (Z-től A-ig)
-void reverse_inorder(Node* root) {
+    if (name && score_str) {
+        trim(name);
+        trim(score_str);
+        Node* found = search(root, name);
+        if (found) {
+            found->score = atoi(score_str);
+        }
+    }
+}
+fclose(f);
+
+void print_participants_inorder(Node* root) {
     if (root == NULL) return;
-    reverse_inorder(root->right);
+    print_participants_inorder(root->left);
     printf("%s, %s, ", root->name,
            root->category == DANCE ? "DANCE" :
            root->category == MUSIC ? "MUSIC" : "OTHER");
@@ -60,98 +37,5 @@ void reverse_inorder(Node* root) {
         printf("Pontszám: %d\n", root->score);
     else
         printf("Pontszám: ismeretlen\n");
-    reverse_inorder(root->left);
-}
-
-// Kategória számlálás, minimum/maximum keresés
-void count_and_extremes(Node* root, int* dance, int* music, int* other, int* min_score, int* max_score) {
-    if (root == NULL) return;
-    count_and_extremes(root->left, dance, music, other, min_score, max_score);
-
-    if (root->category == DANCE) (*dance)++;
-    else if (root->category == MUSIC) (*music)++;
-    else (*other)++;
-
-    if (root->score >= 0) {
-        if (root->score < *min_score) *min_score = root->score;
-        if (root->score > *max_score) *max_score = root->score;
-    }
-
-    count_and_extremes(root->right, dance, music, other, min_score, max_score);
-}
-
-// Felszabadítás
-void free_tree(Node* root) {
-    if (root == NULL) return;
-    free_tree(root->left);
-    free_tree(root->right);
-    free(root);
-}
-
-// === FŐPROGRAM ===
-int main() {
-    FILE* f = fopen("talent.csv", "r");
-    if (!f) {
-        perror("Hiba a talent.csv megnyitásakor");
-        return 1;
-    }
-
-    Node* root = NULL;
-    char line[200];
-
-    // talent.csv beolvasása
-    while (fgets(line, sizeof(line), f)) {
-        char* name = strtok(line, ",\n");
-        char* category = strtok(NULL, ",\n");
-        if (name && category)
-            root = insert(root, name, category);
-    }
-    fclose(f);
-
-    // score.txt beolvasása
-    f = fopen("score.txt", "r");
-    if (!f) {
-        perror("Hiba a score.txt megnyitásakor");
-        return 1;
-    }
-
-    while (fgets(line, sizeof(line), f)) {
-        char* name = strtok(line, ",\n");
-        char* score_str = strtok(NULL, ",\n");
-        if (name && score_str) {
-            Node* found = search(root, name);
-            if (found)
-                found->score = atoi(score_str);
-        }
-    }
-    fclose(f);
-
-    // Adatok kiírása fordított ABC sorrendben
-    printf("=== Versenyzok fordított ABC sorrendben ===\n");
-    reverse_inorder(root);
-
-    // Kategóriaszámolás és min/max
-    int dance = 0, music = 0, other = 0;
-    int min_score = 1000000, max_score = -1;
-
-    count_and_extremes(root, &dance, &music, &other, &min_score, &max_score);
-
-    printf("\n=== Kategória szerinti összesítés ===\n");
-    printf("DANCE: %d fő\n", dance);
-    printf("MUSIC: %d fő\n", music);
-    printf("OTHER: %d fő\n", other);
-
-    printf("\n=== Eredmények ===\n");
-    if (min_score != 1000000)
-        printf("Legalacsonyabb pontszám: %d\n", min_score);
-    else
-        printf("Nincs ismert legalacsonyabb pontszám.\n");
-
-    if (max_score != -1)
-        printf("Legmagasabb pontszám: %d\n", max_score);
-    else
-        printf("Nincs ismert legmagasabb pontszám.\n");
-
-    free_tree(root);
-    return 0;
+    print_participants_inorder(root->right);
 }
